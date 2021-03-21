@@ -1,124 +1,144 @@
-import React, { useState } from 'react';
-import { useContext } from 'react';
-import { UserContext } from '../../App';
-import { useHistory, useLocation } from 'react-router-dom';
-import { initializeLoginFramework, handleGoogleSignIn, handleSignOut, handleFbSignIn, createUserWithEmailAndPassword, signInWithEmailAndPassword } from './loginManager';
+import React, { useContext, useState } from 'react';
+import { handleGoogleSignIn, handleFacebookSignIn, initializeFirebase, createUser, signInEmailPass } from '../FirebaseAuth/FirebaseAuth'
+import { userContex } from '../Home/Home';
+import '../Home/Home.css'
+import { useHistory, useLocation } from 'react-router-dom'
 
 
+initializeFirebase()
 
-function Login() {
-  const [newUser, setNewUser] = useState(false);
-  const [user, setUser] = useState({
-    isSignedIn: false,
-    name: '',
-    email: '',
-    password: '',
-    photo: ''
-  });
+const Login = () => {
+    // Private route purpose
+    let history = useHistory();
+    let location = useLocation();
+    let { from } = location.state || { from: { pathname: "/" } }
+    
+    //Login perpuse...
+    const [loggedInUser, setLoggedInUser] =useContext(userContex)
+    const [resistered, setResistered] = useState(true)
+    const [newuser, setNewuser] = useState({ name: '', email: '', pass: '', confirmPass: '' })
+    const [errorMessage, setErrorMessage] = useState('')
 
-  initializeLoginFramework();
-
-  const [loggedInUser, setLoggedInUser ] = useContext(UserContext);
-  const history = useHistory();
-  const location = useLocation();
-  let { from } = location.state || { from: { pathname: "/" } };
-
-  const googleSignIn = () => {
-      handleGoogleSignIn()
-      .then(res => {
-        handleResponse(res, true);
-      })
-  }
-
-  const fbSignIn = () => {
-      handleFbSignIn()
-      .then(res => {
-        handleResponse(res, true);
-      })
-
-  }
-
-  const signOut = () => {
-      handleSignOut()
-      .then(res => {
-          handleResponse(res, false);
-      })
-  }
-
-  const handleResponse = (res, redirect) =>{
-    setUser(res);
-    setLoggedInUser(res);
-    if(redirect){
-        history.replace(from);
-    }
-  }
-
-  const handleBlur = (e) => {
-    let isFieldValid = true;
-    if(e.target.name === 'email'){
-      isFieldValid = /\S+@\S+\.\S+/.test(e.target.value);
-    }
-    if(e.target.name === 'password'){
-      const isPasswordValid = e.target.value.length > 6;
-      const passwordHasNumber =  /\d{1}/.test(e.target.value);
-      isFieldValid = isPasswordValid && passwordHasNumber;
-    }
-    if(isFieldValid){
-      const newUserInfo = {...user};
-      newUserInfo[e.target.name] = e.target.value;
-      setUser(newUserInfo);
-    }
-  }
-  const handleSubmit = (e) => {
-    if(newUser && user.email && user.password){
-      createUserWithEmailAndPassword(user.name, user.email, user.password)
-      .then(res => {
-        handleResponse(res, true);
-      })
+    //Input Field Validation && Error shown
+    const handleBlur = (event) => {
+        let validData = true;
+        if (event.target.name === 'name') {
+            validData = /^[a-zA-Z]+(([',. -][a-zA-Z ])?[a-zA-Z]*)*$/.test(event.target.value)
+            if (validData) { setErrorMessage('') }
+            else { setErrorMessage('Invalid Name') }
+        }
+        if (event.target.name === 'email') {
+            validData = /\S+@\S+\.\S+/.test(event.target.value)
+            if (validData) { setErrorMessage('') }
+            else { setErrorMessage('Invalid Email Address') } 
+        }
+        if (event.target.name === 'pass') {
+            validData = /^(?=.*[0-9])(?=(?:[^A-Z]*[A-Z]){1})(?=.*[!@#$%^&*])[a-zA-Z0-9!@#$%^&*]{6,12}$/.test(event.target.value)
+            if (validData) {
+                setErrorMessage('')
+                let storePass = { ...newuser }
+                storePass.pass = event.target.value
+                setNewuser(storePass)
+            }
+            else { setErrorMessage('Numaric, Uppercase, Lowercase, Special Char & Length Should be 6 to 12') }
+        }
+        console.log(newuser.pass)
+        if (event.target.name === 'confirmPass') {
+            if (event.target.value === newuser.pass) { setErrorMessage('') }
+            else { setErrorMessage('Password not Match With Privious One') }
+        }
+       if(validData){
+           const validUser = {...newuser}
+           validUser[event.target.name] = event.target.value
+           setNewuser(validUser)
+       }
+    //    console.log(newuser)
     }
 
-    if(!newUser && user.email && user.password){
-      signInWithEmailAndPassword(user.email, user.password)
-      .then(res => {
-        handleResponse(res, true);
-      })
+    //Sign in & Sign Up Form Submit..... 
+    const handleSubmit = event =>{
+
+            if(!resistered){
+                createUser(newuser.email, newuser.pass, newuser.name)
+                .then(message =>{ 
+                    setErrorMessage("Account Created Successfully")
+                    setResistered(true)
+                    history.replace(from)
+                })
+                .catch(error => setErrorMessage(error))
+            }
+                
+            if(resistered){
+                signInEmailPass(newuser.email, newuser.pass)
+                .then(res => {
+                    setLoggedInUser(res)
+                    history.replace(from)                    
+                })
+                .catch(error => setErrorMessage(error))
+                
+            }
+
+        event.preventDefault()
     }
-    e.preventDefault();
-  }
 
+    //Google sign in....
+    const googleLogin =() =>{
+        handleGoogleSignIn()
+        .then(result => {
+            setLoggedInUser(result)
+            history.replace(from) 
+        })
+    }
 
+    //Facebook Sign in...
+    const facebookLogin = () =>{
+        handleFacebookSignIn()
+        .then(result => {
+            setLoggedInUser(result) 
+            history.replace(from)             
+        })
+        
+    }
 
-  return (
-    <div style={{textAlign: 'center'}}>
-      { user.isSignedIn ? <button onClick={signOut}>Sign Out</button> :
-        <button onClick={googleSignIn}>Sign In</button>
-      }
-      <br/>
-      <button onClick={fbSignIn}>Sign in using Facebook</button>
-      {
-        user.isSignedIn && <div>
-          <p>Welcome, {user.name}!</p>
-          <p>Your email: {user.email}</p>
-          <img src={user.photo} alt=""/>
+    return (
+        <div className='backgroundIamge d-flex align-items-center justify-content-center'>
+            <div className="col-md-5">
+                {errorMessage && <p className="alert alert-danger m-3">{errorMessage}</p>
+                }
+                <div className="card px-3">
+                    {
+                        resistered ?
+                            <form onSubmit ={handleSubmit}>
+                                <div className="card-header text-center"><h2>SIGN IN</h2></div>
+                                <div className="card-body">
+                                    <input onBlur={handleBlur} required name='email' type='email' className='form-control mt-2' placeholder='Email' />
+                                    <input onBlur={handleBlur} required name='pass' type='password' className='form-control mt-2' placeholder='Password' />
+                                    <button className='btn btn-warning btn-sm font-weight-bold mt-2'>Login</button>
+                                    <p className='text-small'>Create New Account ? <button onClick={() => setResistered(false)} className='btn btn-info btn-sm mt-2'>Sign Up</button></p>
+                                </div>
+                            </form>
+                            :
+                            <form onSubmit ={handleSubmit}>
+                                <div className="card-header text-center"><h2>SIGN UP</h2></div>
+                                <div className="card-body">
+                                    <input onBlur={handleBlur} required name='name' type='text' className='form-control mt-2' placeholder='Name' />
+                                    <input onBlur={handleBlur} required name='email' type='email' className='form-control mt-2' placeholder='Email' />
+                                    <input onBlur={handleBlur} required name='pass' type='password' className='form-control mt-2' placeholder='Password' />
+                                    <input onBlur={handleBlur} required name='confirmPass' type='password' className='form-control mt-2' placeholder='Confirm Password' />
+                                    <button className='btn btn-warning btn-sm font-weight-bold mt-2'>Create Acc</button>
+                                    <p className='text-small'>Already have an Account ? <button onClick={() => setResistered(true)} className='btn btn-info btn-sm mt-2'>Sign In</button></p>
+                                </div>
+                            </form>
+                    }
+                    <div className="card-footer d-flex justify-content-between">
+                        <button onClick={googleLogin} className='btn btn-light rounded btn-sm font-weight-bold'><span className='pr-1'><img height='15' src="https://i.ibb.co/9vjdGtz/google.png" alt="" /></span> Continue With Google</button>
+                        <button onClick={facebookLogin} className='btn btn-light rounded btn-sm font-weight-bold'><span className='pr-1'><img height='15' src="https://i.ibb.co/4StbQ8J/fb.png" alt="" /></span>  Continue With Facebook</button>
+                    </div>
+                </div>
+            </div>
         </div>
-      }
-
-      <h1>Our own Authentication</h1>
-      <input type="checkbox" onChange={() => setNewUser(!newUser)} name="newUser" id=""/>
-      <label htmlFor="newUser">New User Sign up</label>
-      <form onSubmit={handleSubmit}>
-        {newUser && <input name="name" type="text" onBlur={handleBlur} placeholder="Your name"/>}
-        <br/>
-        <input type="text" name="email" onBlur={handleBlur} placeholder="Your Email address" required/>
-        <br/>
-        <input type="password" name="password" onBlur={handleBlur} placeholder="Your Password" required/>
-        <br/>
-        <input type="submit" value={newUser ? 'Sign up' : 'Sign in'}/>
-      </form>
-      <p style={{color: 'red'}}>{user.error}</p>
-      { user.success && <p style={{color: 'green'}}>User { newUser ? 'created' : 'Logged In'} successfully</p>}
-    </div>
-  );
-}
+    );
+};
 
 export default Login;
+

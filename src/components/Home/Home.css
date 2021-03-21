@@ -1,0 +1,8 @@
+.backgroundIamge{
+    background-image: url('../../Components//images/Bg.png');
+    background-size: cover;
+    height: 100vh;
+    background-position: center;
+    position: 'relative',
+ 
+}
